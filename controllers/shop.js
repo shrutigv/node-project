@@ -1,6 +1,7 @@
 const Product = require("../models/product");
 const Cart = require("../models/cart");
-
+const stripe = require('stripe')('sk_test_51MZqYGSF3YpYI3zYkZ6Y2JH1Tt5nOQ1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j1KX5j');
+// private nkey need s to be moved to vault or env file
 const ERROR_PREFIX = "In shop controller, ";
 
 exports.getProducts = (req, res, next) => {
@@ -122,6 +123,36 @@ exports.getOrders = (req, res, next) => {
     })
     .catch(err => console.log(err));
 };
+
+exports.checkoutSession = (req, res, next) => {
+ try {
+  const YOUR_DOMAIN = 'http://localhost:3000';
+  const session =  stripe.checkout.sessions.create({
+    payment_method_types: [ 'card'],
+    // line items and other checkout details would typically be fetched from the database
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'T-shirt',
+          },
+          unit_amount: 2000,
+        },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: `${process.env.YOUR_DOMAIN}/success`,
+    cancel_url: `${process.env.YOUR_DOMAIN}/cancel`,
+  });
+  res.json({ url: session.url });
+} catch (error) {
+  res.status(500).json({ error: error.message });
+  console.log(error);
+}
+};
+
 
 exports.postOrder = (req, res, next) => {
   let fetchedCart;
