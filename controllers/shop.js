@@ -127,6 +127,8 @@ exports.getOrders = (req, res, next) => {
 exports.checkoutSession = (req, res, next) => {
  try {
   const YOUR_DOMAIN = 'http://localhost:3000';
+  const idempotencyKey = crypto.randomUUID();
+  // idempotency key to safely retry requests would come from a more persistent source in a real application which would be generated specific for each checkout session
   const session =  stripe.checkout.sessions.create({
     payment_method_types: [ 'card'],
     // line items and other checkout details would typically be fetched from the database
@@ -145,11 +147,22 @@ exports.checkoutSession = (req, res, next) => {
     mode: 'payment',
     success_url: `${process.env.YOUR_DOMAIN}/success`,
     cancel_url: `${process.env.YOUR_DOMAIN}/cancel`,
-  });
+  },
+  idempotencyKey);
   res.json({ url: session.url });
 } catch (error) {
-  res.status(500).json({ error: error.message });
-  console.log(error);
+    // Check if the error is a retryable network error or a 500 error
+    // (Stripe caches results for 500s too, so retrying with the same key is safe)
+    if (error.type === 'StripeConnectionError' || error.statusCode === 500) {
+      console.log('Stripe API call failed due to connection error or server error. Retrying with same key...');
+      // In a real application, you'd use an exponential backoff retry strategy
+      // For this example, we'll throw the error and handle the retry higher up or automatically via a library.
+      throw new Error('Retryable error, needs retry'); 
+    } else {
+      // Handle non-retryable errors (e.g., card declined, invalid parameters)
+      console.error('Non-retryable error:', error.message);
+      throw error;
+    }
 }
 };
 
@@ -183,6 +196,3 @@ exports.postOrder = (req, res, next) => {
     })
     .catch(err => console.log(err));
 };
-
-
-
